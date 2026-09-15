@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="style.css" rel="stylesheet">
+    <title>Battle Simulator</title>
+</head>
+<body>
+    <!-- Main Menu & Sandbox -->
+    <div id="main-menu">
+        <h1 style="text-shadow: 2px 2px 5px #000;">Battle Simulator Sandbox</h1>
+        <div class="sandbox-container">
+            <!-- Player Team Builder -->
+            <div class="sandbox-team">
+                <h2 style="color: #3498db;">Player Team</h2>
+                <ul id="player-team-list"></ul>
+                <select id="player-char-select" class="char-select"></select>
+                <button class="add-btn" onclick="addToTeam('player')">+ Add to Player Team</button>
+            </div>
+
+            <!-- Enemy Team Builder -->
+            <div class="sandbox-team">
+                <h2 style="color: #e74c3c;">Enemy Team</h2>
+                <ul id="enemy-team-list"></ul>
+                <select id="enemy-char-select" class="char-select"></select>
+                <button class="add-btn" onclick="addToTeam('enemy')">+ Add to Enemy Team</button>
+            </div>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 15px;">
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <label for="start-wave-input" style="font-weight: bold; color: #fff;">Start Wave:</label>
+                <input type="number" id="start-wave-input" min="1" max="20" value="1" style="width: 60px; padding: 8px; background: #333; color: white; border: 1px solid #555; border-radius: 4px; font-weight: bold; text-align: center;">
+            </div>
+            <div style="display: flex; gap: 20px;">
+                <button class="start-btn" onclick="startSandboxBattle()">Start Sandbox!</button>
+                <button class="start-btn trials-btn" onclick="startTrialsMode()">Start Trials Mode!</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Battle Game Screen (Hidden initially) -->
+    <div id="game-screen" style="display: none;">
+        <!-- Main fight area holding team sides -->
+        <div id="fight-container">
+            <!-- Player Team Side -->
+            <div class="team-side">
+                <div id="player-container"></div>
+                <div class="team-sp-wrapper">
+                    <div class="team-sp-label" style="color: #3498db;">Player Team SP</div>
+                    <div class="health-bar-container team-sp-container" style="border-color: #3498db;">
+                        <div class="health-bar" id="player-sp-bar" style="background-color: #3498db;"></div>
+                        <span class="hp-text" id="player-sp-text">0 / 0 SP</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Enemy Team Side -->
+            <div class="team-side">
+                <div id="enemy-container"></div>
+                <div class="team-sp-wrapper">
+                    <div class="team-sp-label" style="color: #e74c3c;">Enemy Team SP</div>
+                    <div class="health-bar-container team-sp-container" style="border-color: #e74c3c;">
+                        <div class="health-bar" id="enemy-sp-bar" style="background-color: #e74c3c;"></div>
+                        <span class="hp-text" id="enemy-sp-text">0 / 0 SP</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Battle Log -->
+        <div id="battle-log">Battle started!</div>
+
+        <!-- Action Menu -->
+        <div id="action-menu"></div>
+    </div>
+
+    <!-- Audio for Wave Music -->
+    <audio id="bgm" loop></audio>
+
+    <script src="script.js"></script>
+</body>
+</html>
