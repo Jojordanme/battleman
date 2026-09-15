@@ -437,23 +437,44 @@ body {
 .move-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Add this anywhere in your style.css file */
+/* BURN AND POISON BADGES */
 .burn-badge {
     position: absolute;
-    top: -10px;
-    right: 15px; 
-    background: #d35400;
+    bottom: -10px;
+    left: -10px;
+    background: #e67e22;
     color: #fff;
     font-weight: bold;
     font-size: 11px;
     padding: 2px 6px;
     border-radius: 10px;
     border: 1px solid #fff;
-    box-shadow: 0 0 8px rgba(211, 84, 0, 0.8);
+    box-shadow: 0 0 8px rgba(230, 126, 34, 0.8);
     display: none;
     z-index: 5;
+    width: max-content; /* Prevents stretching */
+    height: max-content; /* Prevents stretching */
 }
+.burn-badge.visible { display: block; } /* Changed from .active */
 
-.burn-badge.active { display: block; }
+.poison-badge {
+    position: absolute;
+    bottom: -10px;
+    right: -10px;
+    background: #2ecc71;
+    color: #fff;
+    font-weight: bold;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    border: 1px solid #fff;
+    box-shadow: 0 0 8px rgba(46, 204, 113, 0.8);
+    display: none;
+    z-index: 5;
+    width: max-content; /* Prevents stretching */
+    height: max-content; /* Prevents stretching */
+}
+.poison-badge.visible { display: block; } /* Changed from .active */
 
 /* ================= Animations ================= */
 @keyframes tackle-right {

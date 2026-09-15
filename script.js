@@ -61,8 +61,67 @@ actionCmdStyle.innerHTML = `
     border-radius: 6px;
     transition: width 0.1s linear;
 }
+
+/* BURN AND POISON BADGES */
+.burn-badge {
+    position: absolute;
+    bottom: -10px;
+    left: -10px;
+    background: #e67e22;
+    color: #fff;
+    font-weight: bold;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    border: 1px solid #fff;
+    box-shadow: 0 0 8px rgba(230, 126, 34, 0.8);
+    display: none;
+    z-index: 5;
+}
+.burn-badge.active { display: block; }
+
+.poison-badge {
+    position: absolute;
+    bottom: -10px;
+    right: -10px;
+    background: #2ecc71;
+    color: #fff;
+    font-weight: bold;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    border: 1px solid #fff;
+    box-shadow: 0 0 8px rgba(46, 204, 113, 0.8);
+    display: none;
+    z-index: 5;
+}
+.poison-badge.active { display: block; }
+
+/* MOBILE ACTION BUTTON */
+.mobile-action-btn {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 20px 50px;
+    font-size: 24px;
+    font-weight: bold;
+    background-color: #e74c3c;
+    color: white;
+    border: 4px solid #c0392b;
+    border-radius: 12px;
+    z-index: 10001;
+    box-shadow: 0 0 15px rgba(231, 76, 60, 0.8);
+    cursor: pointer;
+    user-select: none;
+}
+.mobile-action-btn:active {
+    background-color: #c0392b;
+}
 `;
 document.head.appendChild(actionCmdStyle);
+
+const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
 // ==========================================
 // 1. CHARACTER STATS & MOVESET MODULE
@@ -97,6 +156,13 @@ const CharacterModule = {
         imgSrc: "Images/Thief.png",
         baseStats: { hp: 7, def: 0, sp: 5, maxSp: 5 },
         moves: ["quickPunch", "pickpocket"]
+    },
+    hazmat: {
+        name: "Hazmat",
+        imgSrc: "Images/hazmat.png", 
+        baseStats: { hp: 12, def: 2, sp: 6, maxSp: 6 },
+        moves: ["hazmatPunch", "cure", "poisonGas"],
+        immunities: ["burn", "dizzy", "poison"]
     },
     tank: {
         name: "Tank",
@@ -195,7 +261,7 @@ const CharacterModule = {
     juggernautHelper: {
         name: "Juggernaut (Helper)",
         imgSrc: "Images/juggernaut.png",
-        baseStats: { hp: 15, def:2, sp: 0, maxSp: 0 }, // Half Max HP
+        baseStats: { hp: 15, def:2, sp: 0, maxSp: 0 }, 
         moves: ["bulletHell"],
     }
 };
@@ -204,6 +270,52 @@ const CharacterModule = {
 // 2. EXECUTABLE MOVESET MODULE
 // ==========================================
 const MovesetModule = {
+    // ---- Hazmat Moves ----
+    hazmatPunch: {
+        name: "Quick Punch (Poison)",
+        type: "melee",
+        spCost: 0,
+        async execute(attacker, defender) {
+            const bonus = await performActionCommand(attacker, defender, "melee");
+            updateLog(`${attacker.name} punches ${defender.name}!`);
+            const anim = attacker.isPlayer ? "anim-attack-right" : "anim-attack-left";
+            await playAnimation(`img-${attacker.id}`, anim, 400);
+            const damage = Math.floor(3 + attacker.stats.attackAdd + attacker.stats.permanentAttack) + bonus;
+            defender.takeDamage(damage, false, attacker);
+
+            if (Math.random() < 0.3 && defender.isAlive() && !defender.immunities.includes("poison")) {
+                defender.poisonTurns = 3;
+                updateLog(`${defender.name} was poisoned!`);
+            }
+            
+            attacker.stats.attackAdd = 0;
+            attacker.updateUI();
+            defender.updateUI();
+        }
+    },
+    poisonGas: {
+        name: "Poison Gas",
+        type: "aoe",
+        spCost: 6,
+        async execute(attacker, defenders) {
+            const bonus = await performActionCommand(attacker, defenders, "aoe");
+            updateLog(`${attacker.name} releases a deadly Poison Gas!`);
+            const anim = attacker.isPlayer ? "anim-attack-right" : "anim-attack-left";
+            await playAnimation(`img-${attacker.id}`, anim, 400);
+
+            defenders.forEach(defender => {
+                if (defender.isAlive() && !defender.immunities.includes("poison")) {
+                    defender.poisonTurns = 4;
+                    defender.updateUI();
+                }
+            });
+            if (bonus > 0) {
+                updateLog(`The toxic fumes were concentrated flawlessly!`);
+            }
+            attacker.stats.attackAdd = 0;
+            attacker.updateUI();
+        }
+    },
     // ---- The President Moves ----
     presidentShotgun: {
         name: "President Shotgun (+4 SP)",
@@ -291,6 +403,11 @@ const MovesetModule = {
             
             if (targetAlly.burnTurns > 0) {
                 targetAlly.burnTurns = 0;
+                cleansed = true;
+            }
+
+            if (targetAlly.poisonTurns > 0) {
+                targetAlly.poisonTurns = 0;
                 cleansed = true;
             }
             
@@ -1116,7 +1233,7 @@ async function performActionCommand(attacker, target, cmdType = "melee") {
             // ==========================================
             const instrPopup = document.createElement("div");
             instrPopup.className = "action-instr";
-            instrPopup.innerText = "MASH Click/Space to fill!";
+            instrPopup.innerText = isMobile ? "TAP MASH BUTTON to fill!" : "MASH Click/Space to fill!";
             document.body.appendChild(instrPopup);
             instrPopup.style.top = `${targetRect.top - 80}px`;
             instrPopup.style.left = `${targetRect.left + targetRect.width / 2}px`;
@@ -1130,6 +1247,20 @@ async function performActionCommand(attacker, target, cmdType = "melee") {
             mashFill.className = "mash-bar-fill";
             mashContainer.appendChild(mashFill);
             document.body.appendChild(mashContainer);
+            
+            let mobileBtn = null;
+            if (isMobile) {
+                mobileBtn = document.createElement("button");
+                mobileBtn.className = "mobile-action-btn";
+                mobileBtn.innerText = "MASH TAP!";
+                document.body.appendChild(mobileBtn);
+                
+                mobileBtn.addEventListener("touchstart", (e) => {
+                    e.preventDefault();
+                    fill += 15;
+                    if (fill > 100) fill = 100;
+                }, {passive: false});
+            }
 
             let fill = 0;
             let animationId;
@@ -1140,7 +1271,8 @@ async function performActionCommand(attacker, target, cmdType = "melee") {
             
             const mashHandler = (e) => {
                 if (e.type === "keydown" && e.code !== "Space") return;
-                if (e.type === "mousedown" && e.target.tagName === "BUTTON") return; 
+                if (e.type === "mousedown" && e.target.tagName === "BUTTON" && e.target !== mobileBtn) return; 
+                if (e.type === "touchstart") return; // Handled by button's exact listener
                 e.preventDefault();
                 fill += 15;
                 if (fill > 100) fill = 100;
@@ -1152,6 +1284,7 @@ async function performActionCommand(attacker, target, cmdType = "melee") {
                 document.removeEventListener("mousedown", mashHandler);
                 instrPopup.remove();
                 mashContainer.remove();
+                if (mobileBtn) mobileBtn.remove();
             };
 
             setTimeout(() => {
@@ -1186,11 +1319,11 @@ async function performActionCommand(attacker, target, cmdType = "melee") {
         }
         else if (cmdType === "ranged") {
             // ==========================================
-            // RANGED ACTION COMMAND (WASD Alignment)
+            // RANGED ACTION COMMAND (WASD / Drag Alignment)
             // ==========================================
             const instrPopup = document.createElement("div");
             instrPopup.className = "action-instr";
-            instrPopup.innerText = "Use WASD/Arrows to Aim!";
+            instrPopup.innerText = isMobile ? "Drag anywhere to Aim!" : "Use WASD/Arrows to Aim!";
             document.body.appendChild(instrPopup);
             instrPopup.style.top = `${targetRect.top - 60}px`;
             instrPopup.style.left = `${targetRect.left + targetRect.width / 2}px`;
@@ -1214,6 +1347,16 @@ async function performActionCommand(attacker, target, cmdType = "melee") {
             };
             const keyup = (e) => { keys[e.key.toLowerCase()] = false; };
             
+            let touchMoveHandler = null;
+            if (isMobile) {
+                touchMoveHandler = (e) => {
+                    e.preventDefault();
+                    cx = e.touches[0].clientX;
+                    cy = e.touches[0].clientY;
+                };
+                document.addEventListener("touchmove", touchMoveHandler, {passive: false});
+            }
+            
             let animationId;
             let lastTime = Date.now();
             let elapsed = 0;
@@ -1224,6 +1367,7 @@ async function performActionCommand(attacker, target, cmdType = "melee") {
                 cancelAnimationFrame(animationId);
                 document.removeEventListener("keydown", keydown);
                 document.removeEventListener("keyup", keyup);
+                if (touchMoveHandler) document.removeEventListener("touchmove", touchMoveHandler);
                 instrPopup.remove();
                 crosshair.remove();
                 targetMarker.remove();
@@ -1243,10 +1387,12 @@ async function performActionCommand(attacker, target, cmdType = "melee") {
                 lastTime = now;
                 elapsed += dt;
                 
-                if (keys['w'] || keys['arrowup']) cy -= speed * dt;
-                if (keys['s'] || keys['arrowdown']) cy += speed * dt;
-                if (keys['a'] || keys['arrowleft']) cx -= speed * dt;
-                if (keys['d'] || keys['arrowright']) cx += speed * dt;
+                if (!isMobile) {
+                    if (keys['w'] || keys['arrowup']) cy -= speed * dt;
+                    if (keys['s'] || keys['arrowdown']) cy += speed * dt;
+                    if (keys['a'] || keys['arrowleft']) cx -= speed * dt;
+                    if (keys['d'] || keys['arrowright']) cx += speed * dt;
+                }
                 
                 // Screen boundaries
                 cx = Math.max(20, Math.min(window.innerWidth - 20, cx));
@@ -1276,7 +1422,7 @@ async function performActionCommand(attacker, target, cmdType = "melee") {
             // ==========================================
             const instrPopup = document.createElement("div");
             instrPopup.className = "action-instr";
-            instrPopup.innerText = "Click or SPACE to hit the mark!";
+            instrPopup.innerText = isMobile ? "TAP the button to hit the mark!" : "Click or SPACE to hit the mark!";
             document.body.appendChild(instrPopup);
             instrPopup.style.top = `${targetRect.top - 60}px`;
             instrPopup.style.left = `${targetRect.left + targetRect.width / 2}px`;
@@ -1300,6 +1446,21 @@ async function performActionCommand(attacker, target, cmdType = "melee") {
 
             let animationId;
             let lastTime = Date.now();
+            
+            let mobileBtn = null;
+            if (isMobile) {
+                mobileBtn = document.createElement("button");
+                mobileBtn.className = "mobile-action-btn";
+                mobileBtn.innerText = "TAP TO HIT!";
+                document.body.appendChild(mobileBtn);
+                
+                mobileBtn.addEventListener("touchstart", (e) => {
+                    e.preventDefault();
+                    const distance = Math.abs(currentX - endX);
+                    if (distance < 45) finishMelee(true);
+                    else finishMelee(false);
+                }, {passive: false});
+            }
 
             const cleanup = () => {
                 cancelAnimationFrame(animationId);
@@ -1308,6 +1469,7 @@ async function performActionCommand(attacker, target, cmdType = "melee") {
                 crosshair.remove();
                 targetMarker.remove();
                 instrPopup.remove();
+                if (mobileBtn) mobileBtn.remove();
             };
 
             const finishMelee = (success) => {
@@ -1317,7 +1479,8 @@ async function performActionCommand(attacker, target, cmdType = "melee") {
 
             const inputHandler = (e) => {
                 if (e.type === "keydown" && e.code !== "Space") return;
-                if (e.type === "mousedown" && e.target.tagName === "BUTTON") return;
+                if (e.type === "mousedown" && e.target.tagName === "BUTTON" && e.target !== mobileBtn) return;
+                if (e.type === "touchstart") return;
                 e.preventDefault();
 
                 const distance = Math.abs(currentX - endX);
@@ -1410,10 +1573,11 @@ class Fighter {
         this.spRegenTurns = 0;
         this.defBoostAmount = 0;
         this.incomingDefenseOrders = 0;
-        this.surgeryDefAttacks = 0; // Added for Medic Surgery Update
+        this.surgeryDefAttacks = 0; 
         this.invisibleTurns = 0;
         this.dizzyTurns = 0;
         this.burnTurns = 0;
+        this.poisonTurns = 0; 
         this.nextAttackBurns = 0;
         this.lifesteal = false;
         this.immunities = template.immunities || [];
@@ -1423,7 +1587,7 @@ class Fighter {
         this.invisibleUsedOnce = false;
         this.ritualUsedOnce = false;
         this.sharpenUses = 0;
-        this.ammo = 0; // Added for Musketeer
+        this.ammo = 0; 
         
         this.render(insertAtFront, isInit);
     }
@@ -1447,6 +1611,16 @@ class Fighter {
             if (!this.isAlive()) return;
         }
 
+        // Evaluate poison status next
+        if (this.poisonTurns > 0) {
+            this.poisonTurns--;
+            if (this.poisonTurns === 0) {
+                updateLog(`${this.name} is no longer poisoned.`);
+            }
+            this.updateUI();
+            await new Promise(resolve => setTimeout(resolve, 300));
+        }
+
         this.turnCount++;
         this.isSkippingTurn = false;
 
@@ -1467,8 +1641,17 @@ class Fighter {
                 triggerBoostVisual(this.surgeryTarget, 2, "gold");
                 triggerBoostVisual(this.surgeryTarget, 2, "blue");
 
+                let cleansed = false;
                 if (this.surgeryTarget.dizzyTurns > 0) {
                     this.surgeryTarget.dizzyTurns = 0;
+                    cleansed = true;
+                }
+                if (this.surgeryTarget.poisonTurns > 0) {
+                    this.surgeryTarget.poisonTurns = 0;
+                    cleansed = true;
+                }
+                
+                if(cleansed){
                     updateLog(`${this.surgeryTarget.name} was cleansed of negative effects!`);
                 }
                 this.surgeryTarget.updateUI();
@@ -1540,6 +1723,7 @@ class Fighter {
 
         entityDiv.innerHTML = `
             <div class="burn-badge" id="burn-badge-${this.id}">🔥 0</div>
+            <div class="poison-badge" id="poison-badge-${this.id}">☠️ 0</div>
             <div class="ls-badge" id="ls-badge-${this.id}">❤️</div>
             <div class="boost-badge" id="badge-${this.id}">▲ +0</div>
             <div class="def-badge" id="def-badge-${this.id}">🛡️ 0</div>
@@ -1594,9 +1778,19 @@ class Fighter {
         if (burnBadge) {
             if (this.burnTurns > 0) {
                 burnBadge.innerText = `🔥 ${this.burnTurns}`;
-                burnBadge.classList.add("active");
+                burnBadge.classList.add("visible"); // Changed from active
             } else {
-                burnBadge.classList.remove("active");
+                burnBadge.classList.remove("visible"); // Changed from active
+            }
+        }
+
+        const poisonBadge = document.getElementById(`poison-badge-${this.id}`);
+        if (poisonBadge) {
+            if (this.poisonTurns > 0) {
+                poisonBadge.innerText = `☠️ ${this.poisonTurns}`;
+                poisonBadge.classList.add("visible"); // Changed from active
+            } else {
+                poisonBadge.classList.remove("visible"); // Changed from active
             }
         }
 
@@ -1671,6 +1865,15 @@ class Fighter {
         
         this.stats.hp += actualHeal;
         triggerHealVisual(this, actualHeal);
+        
+        // Poison Status Check
+        if (actualHeal > 0 && this.poisonTurns > 0) {
+            this.stats.hp -= 1;
+            if (this.stats.hp < 0) this.stats.hp = 0;
+            triggerDamageVisual(this, 1);
+            updateLog(`${this.name} takes 1 damage from Poison for healing!`);
+        }
+
         this.updateUI();
         return actualHeal;
     }
@@ -1705,8 +1908,15 @@ class Fighter {
         
         this.stats.hp -= actualDamage;
         if (this.stats.hp < 0) this.stats.hp = 0;
-        
         triggerDamageVisual(this, actualDamage);
+
+        // Poison Status Check
+        if (actualDamage > 0 && this.poisonTurns > 0 && this.isAlive()) {
+            this.stats.hp -= 1;
+            if (this.stats.hp < 0) this.stats.hp = 0;
+            triggerDamageVisual(this, 1);
+            updateLog(`${this.name} takes 1 damage from Poison from being attacked!`);
+        }
 
         if (attacker && attacker.nextAttackBurns > 0) {
             this.burnTurns = Math.max(this.burnTurns, attacker.nextAttackBurns);
@@ -1772,7 +1982,7 @@ const waveData = [
     ["forcefieldTrooper","fireworkGuy","medic","blacksmith"],
     ["forcefieldTrooper","knight","musketeer","musketeer"],
     ["officer","musketeer","musketeer","medic"],
-    ["forcefieldTrooper","officer","musketeer","fireqworkGuy"],
+    ["forcefieldTrooper","officer","musketeer","fireworkGuy"],
     ["forcefieldTrooper","musketeer","president",]
 ];
 
