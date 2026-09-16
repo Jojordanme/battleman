@@ -263,6 +263,18 @@ const CharacterModule = {
         imgSrc: "Images/juggernaut.png",
         baseStats: { hp: 15, def:2, sp: 0, maxSp: 0 }, 
         moves: ["bulletHell"],
+    },
+    pharmacist: {
+        name: "Pharmacist",
+        imgSrc: "Images/pharmacist.png",
+        baseStats: { hp: 11, def: 0, sp: 5, maxSp: 5 },
+        moves: ["testTubeThrow", "strengthen", "painkiller"]
+    },
+    apparition: {
+        name: "Apparition",
+        imgSrc: "Images/apparition.png",
+        baseStats: { hp: 18, def: 0, sp: 4, maxSp: 4 },
+        moves: ["invisibleOneTurn", "scare", "shadowStrike", "shadowStep"]
     }
 };
 
@@ -270,6 +282,137 @@ const CharacterModule = {
 // 2. EXECUTABLE MOVESET MODULE
 // ==========================================
 const MovesetModule = {
+    // ---- Pharmacist Moves ----
+    testTubeThrow: {
+        name: "Test Tube",
+        type: "ranged-any",
+        spCost: 0,
+        async execute(attacker, defender) {
+            const bonus = await performActionCommand(attacker, defender, "ranged");
+            updateLog(`${attacker.name} throws a Test Tube at ${defender.name}!`);
+            const anim = attacker.isPlayer ? "anim-attack-right" : "anim-attack-left";
+            await playAnimation(`img-${attacker.id}`, anim, 400);
+            const damage = Math.floor(1 + attacker.stats.attackAdd + attacker.stats.permanentAttack) + bonus;
+            defender.takeDamage(damage, false, attacker);
+
+            if (Math.random() < 0.25 && defender.isAlive() && !defender.immunities.includes("poison")) {
+                defender.poisonTurns = 3; 
+                updateLog(`${defender.name} was poisoned!`);
+            }
+            
+            attacker.stats.attackAdd = 0;
+            attacker.updateUI();
+            defender.updateUI();
+        }
+    },
+    strengthen: {
+        name: "Strengthen (+3 Atk, +1 Def)",
+        type: "support-ally-target",
+        spCost: 6,
+        async execute(attacker, targetAlly) {
+            updateLog(`${attacker.name} gives medicine to ${targetAlly.name}!`);
+            await playAnimation(`img-${attacker.id}`, "anim-boost", 400);
+            targetAlly.stats.attackAdd += 3;
+            targetAlly.stats.def += 1;
+            targetAlly.defBoostAmount += 1;
+            triggerBoostVisual(targetAlly, 3, "gold");
+            triggerBoostVisual(targetAlly, 1, "blue");
+            targetAlly.updateUI();
+        }
+    },
+    painkiller: {
+        name: "Painkiller",
+        type: "support-ally-target",
+        spCost: 10,
+        async execute(attacker, targetAlly) {
+            updateLog(`${attacker.name} applies a Painkiller to ${targetAlly.name}! (+5 Def, +4 HP)`);
+            await playAnimation(`img-${attacker.id}`, "anim-boost", 400);
+            targetAlly.heal(4);
+            targetAlly.stats.def += 5;
+            targetAlly.defBoostAmount += 5;
+            triggerBoostVisual(targetAlly, 5, "blue");
+            targetAlly.updateUI();
+        }
+    },
+    // ---- Apparition Moves ----
+    invisibleOneTurn: {
+        name: "Invisible (1 Turn)",
+        type: "support",
+        spCost: 0,
+        isUsable(attacker) {
+            return !attacker.invisibleUsedOnce;
+        },
+        async execute(attacker) {
+            attacker.invisibleUsedOnce = true;
+            attacker.invisibleTurns = 1;
+            updateLog(`${attacker.name} turns invisible! (Untargetable for 1 turn)`);
+            attacker.updateUI();
+            await playAnimation(`img-${attacker.id}`, "anim-boost", 800);
+        }
+    },
+    scare: {
+        name: "Scare",
+        type: "ranged-any",
+        spCost: 0,
+        async execute(attacker, defender) {
+            const bonus = await performActionCommand(attacker, defender, "ranged");
+            updateLog(`${attacker.name} scares ${defender.name}!`);
+            const anim = attacker.isPlayer ? "anim-attack-right" : "anim-attack-left";
+            await playAnimation(`img-${attacker.id}`, anim, 400);
+            const damage = Math.floor(6 + attacker.stats.attackAdd + attacker.stats.permanentAttack) + bonus;
+            defender.takeDamage(damage, false, attacker);
+            attacker.stats.attackAdd = 0;
+            attacker.updateUI();
+        }
+    },
+    shadowStrike: {
+        name: "Shadow Strike (Dizzy)",
+        type: "melee",
+        spCost: 4,
+        async execute(attacker, defender) {
+            const bonus = await performActionCommand(attacker, defender, "melee");
+            updateLog(`${attacker.name} uses Shadow Strike on ${defender.name}!`);
+            const anim = attacker.isPlayer ? "anim-attack-right" : "anim-attack-left";
+            await playAnimation(`img-${attacker.id}`, anim, 400);
+            const damage = Math.floor(6 + attacker.stats.attackAdd + attacker.stats.permanentAttack) + bonus;
+            defender.takeDamage(damage, false, attacker);
+            
+            if (!defender.immunities.includes("dizzy")) {
+                defender.dizzyTurns = 3;
+                updateLog(`${defender.name} is dizzy for 3 turns!`);
+            } else {
+                updateLog(`${defender.name} is immune to dizziness!`);
+            }
+            
+            defender.updateUI();
+            attacker.stats.attackAdd = 0;
+            attacker.updateUI();
+        }
+    },
+    shadowStep: {
+        name: "Shadow Step (AoE Dizzy)",
+        type: "aoe",
+        spCost: 13,
+        async execute(attacker, defenders) {
+            const bonus = await performActionCommand(attacker, defenders, "aoe");
+            updateLog(`${attacker.name} uses Shadow Step!`);
+            const anim = attacker.isPlayer ? "anim-attack-right" : "anim-attack-left";
+            await playAnimation(`img-${attacker.id}`, anim, 400);
+            
+            const damage = Math.floor(6 + attacker.stats.attackAdd + attacker.stats.permanentAttack) + bonus;
+            defenders.forEach(defender => {
+                if (defender.isAlive()) {
+                    defender.takeDamage(damage, false, attacker);
+                    if (!defender.immunities.includes("dizzy")) {
+                        defender.dizzyTurns = Math.max(defender.dizzyTurns, 2);
+                    }
+                }
+            });
+            
+            attacker.stats.attackAdd = 0;
+            attacker.updateUI();
+        }
+    },
     // ---- Hazmat Moves ----
     hazmatPunch: {
         name: "Quick Punch (Poison)",
@@ -581,7 +724,7 @@ const MovesetModule = {
         spCost: 0,
         async execute(attacker) {
             attacker.stats.def += 1;
-            attacker.defBoostAmount = 1;
+            attacker.defBoostAmount += 1;
             attacker.updateUI();
             updateLog(`${attacker.name} braces for impact (+1 Defense)!`);
             triggerBoostVisual(attacker, 1, "blue");
@@ -594,7 +737,7 @@ const MovesetModule = {
         spCost: 3,
         async execute(attacker) {
             attacker.stats.def += 2;
-            attacker.defBoostAmount = 2;
+            attacker.defBoostAmount += 2;
             attacker.updateUI();
             updateLog(`${attacker.name} takes a defensive stance (+2 Defense)!`);
             triggerBoostVisual(attacker, 2, "blue");
@@ -1983,7 +2126,12 @@ const waveData = [
     ["forcefieldTrooper","knight","musketeer","musketeer"],
     ["officer","musketeer","musketeer","medic"],
     ["forcefieldTrooper","officer","musketeer","fireworkGuy"],
-    ["forcefieldTrooper","musketeer","president",]
+    ["forcefieldTrooper","musketeer","president",],
+    ["knight","musketeer","hazmat","medic"],
+    ["hazmat"," musketeer","hazmat","musketeer"],
+    ["apparition","musketeer","officer","medic"],
+    ["apparition","apparition","cultist","cultist"],
+    ["juggernaut","tank"],
 ];
 
 // Dynamically calculates a power level scalar score grounded to Average Person as ~1-2.
@@ -2153,9 +2301,9 @@ function loadTrialsWave() {
     
     if (currentWave >= 0 && currentWave <= 5) {
         musicSrc = "Music/wave1-6.mp3";
-    } else if (currentWave === 6 || currentWave === 14) {
+    } else if (currentWave === 6 || currentWave === 14 || currentwave == 24) {
         musicSrc = "Music/wave7.mp3";
-    } else if (currentWave === 7 || currentWave === 8) {
+    } else if ((currentWave === 7 || currentWave === 8) || (currentwave >= 20 && currentWave < 24)) {
         musicSrc = "Music/wave8-9.mp3";
     } else if (currentWave === 9) {
         musicSrc = "Music/wave10.mp3";
