@@ -2301,9 +2301,9 @@ function loadTrialsWave() {
     
     if (currentWave >= 0 && currentWave <= 5) {
         musicSrc = "Music/wave1-6.mp3";
-    } else if (currentWave === 6 || currentWave === 14 || currentwave == 24) {
+    } else if (currentWave === 6 || currentWave === 14 || currentWave == 24) {
         musicSrc = "Music/wave7.mp3";
-    } else if ((currentWave === 7 || currentWave === 8) || (currentwave >= 20 && currentWave < 24)) {
+    } else if ((currentWave === 7 || currentWave === 8) || (currentWave >= 20 && currentWave < 24)) {
         musicSrc = "Music/wave8-9.mp3";
     } else if (currentWave === 9) {
         musicSrc = "Music/wave10.mp3";
