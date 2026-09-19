@@ -131,7 +131,7 @@ const CharacterModule = {
         name: "Businessman",
         imgSrc: "Images/businessman.png",
         baseStats: { hp: 12, def: 0, sp: 10, maxSp: 10 },
-        moves: ["briefcaseBash", "coffeeBreak", "investment"]
+        moves: ["briefcaseBash", "coffeeBreak", "investment","deal"]
     },
     fireworkGuy: {
         name: "Firework Guy",
@@ -194,7 +194,7 @@ const CharacterModule = {
     grimReaper: {
         name: "Grim Reaper",
         imgSrc: "Images/reaper.png",
-        baseStats: { hp: 40, def: 1, sp: 15, maxSp: 15 },
+        baseStats: { hp: 35, def: 1, sp: 15, maxSp: 15 },
         moves: ["scythe", "summonReaper", "lifeSucker", "soulClaimer"],
         isBoss: true,
         immunities: ["dizzy","poison"]
@@ -933,11 +933,11 @@ const MovesetModule = {
         name: "Pickpocket",
         type: "support",
         spCost: 0,
-        async execute(attacker) {
+        async execute(attacker, defender) {
             const enemyTeamKey = attacker.isPlayer ? 'enemy' : 'player';
             const friendlyTeamKey = attacker.isPlayer ? 'player' : 'enemy';
 
-            const stolenAmount = Math.min(2, TeamStats[enemyTeamKey].sp);
+            const stolenAmount = Math.min(5, TeamStats[enemyTeamKey].sp);
             if (stolenAmount > 0) {
                 TeamStats[enemyTeamKey].sp -= stolenAmount;
                 TeamStats[friendlyTeamKey].sp = Math.min(
@@ -945,10 +945,15 @@ const MovesetModule = {
                     TeamStats[friendlyTeamKey].sp + stolenAmount
                 );
             }
+            const damage = Math.floor(1 + attacker.stats.attackAdd + attacker.stats.permanentAttack) + bonus;
+            defender.takeDamage(damage, false, attacker);
+            attacker.stats.attackAdd = 0;
 
             updateLog(`${attacker.name} pickpockets the enemy team, stealing ${stolenAmount} SP!`);
             updateTeamSPUI();
             await playAnimation(`img-${attacker.id}`, "anim-boost", 800);
+            attacker.updateUI();
+
         }
     },
     apShot: {
