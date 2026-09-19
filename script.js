@@ -78,7 +78,7 @@ actionCmdStyle.innerHTML = `
     display: none;
     z-index: 5;
 }
-.burn-badge.active { display: block; }
+.burn-badge.visible { display: block; }
 
 .poison-badge {
     position: absolute;
@@ -95,7 +95,7 @@ actionCmdStyle.innerHTML = `
     display: none;
     z-index: 5;
 }
-.poison-badge.active { display: block; }
+.poison-badge.visible { display: block; }
 
 /* MOBILE ACTION BUTTON */
 .mobile-action-btn {
@@ -171,7 +171,7 @@ const CharacterModule = {
         moves: ["apShot", "heShot"],
         isBoss: true,
         isSlow: true,
-        immunities: ["dizzy"]
+        immunities: ["dizzy","poison","burn"]
     },
     ghost: {
         name: "Ghost",
@@ -197,7 +197,7 @@ const CharacterModule = {
         baseStats: { hp: 40, def: 1, sp: 15, maxSp: 15 },
         moves: ["scythe", "summonReaper", "lifeSucker", "soulClaimer"],
         isBoss: true,
-        immunities: ["dizzy"]
+        immunities: ["dizzy","poison"]
     },
     medic: {
         name: "Medic",
@@ -235,7 +235,7 @@ const CharacterModule = {
         baseStats: { hp: 30, def: 6, sp: 6, maxSp: 10 },
         moves: ["bulletHell", "rally"],
         isBoss: true,
-        immunities: ["dizzy"]
+
     },
     forcefieldTrooper: {
         name: "Forcefield Trooper",
@@ -253,7 +253,7 @@ const CharacterModule = {
     president: {
         name: "The President",
         imgSrc: "Images/president.png",
-        baseStats: { hp: 40, def: 0, sp: 0, maxSp: 15 },
+        baseStats: { hp: 50, def: 0, sp: 0, maxSp: 15 },
         moves: ["presidentShotgun", "callForHelp", "airStrike"],
         isBoss: true,
         immunities: ["dizzy"]
@@ -267,7 +267,7 @@ const CharacterModule = {
     pharmacist: {
         name: "Pharmacist",
         imgSrc: "Images/pharmacist.png",
-        baseStats: { hp: 11, def: 0, sp: 5, maxSp: 5 },
+        baseStats: { hp: 11, def: 0, sp: 10, maxSp: 10 },
         moves: ["testTubeThrow", "strengthen", "painkiller"]
     },
     apparition: {
@@ -308,7 +308,7 @@ const MovesetModule = {
     strengthen: {
         name: "Strengthen (+3 Atk, +1 Def)",
         type: "support-ally-target",
-        spCost: 6,
+        spCost:4,
         async execute(attacker, targetAlly) {
             updateLog(`${attacker.name} gives medicine to ${targetAlly.name}!`);
             await playAnimation(`img-${attacker.id}`, "anim-boost", 400);
@@ -323,11 +323,11 @@ const MovesetModule = {
     painkiller: {
         name: "Painkiller",
         type: "support-ally-target",
-        spCost: 10,
+        spCost: 8,
         async execute(attacker, targetAlly) {
-            updateLog(`${attacker.name} applies a Painkiller to ${targetAlly.name}! (+5 Def, +4 HP)`);
+            updateLog(`${attacker.name} applies a Painkiller to ${targetAlly.name}! (+5 Def, +8 HP)`);
             await playAnimation(`img-${attacker.id}`, "anim-boost", 400);
-            targetAlly.heal(4);
+            targetAlly.heal(8);
             targetAlly.stats.def += 5;
             targetAlly.defBoostAmount += 5;
             triggerBoostVisual(targetAlly, 5, "blue");
@@ -1667,11 +1667,30 @@ function summonEntity(characterKey, isPlayer, atFront = false) {
     const team = isPlayer ? playerTeam : enemyTeam;
     if (atFront) {
         team.unshift(newFighter); 
+        // FIX: Shift currentPlayerIndex so the active player doesn't accidentally get an extra turn
+        if (isPlayer && isPlayerPhase) {
+            currentPlayerIndex++;
+        } else if (!isPlayer && !isPlayerPhase) {
+            currentPlayerIndex++;
+        }
     } else {
         team.push(newFighter); 
     }
     
     newFighter.updateUI();
+}
+
+// Helper to trigger poison damage sequentially after actions
+async function applyPostActionPoison(activeFighter) {
+    if (activeFighter.poisonTurns > 0 && activeFighter.isAlive()) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        activeFighter.stats.hp -= 1;
+        if (activeFighter.stats.hp < 0) activeFighter.stats.hp = 0;
+        triggerDamageVisual(activeFighter, 1);
+        updateLog(`${activeFighter.name} takes 1 damage from Poison after acting!`);
+        activeFighter.updateUI();
+        await new Promise(resolve => setTimeout(resolve, 600));
+    }
 }
 
 // ==========================================
@@ -1921,9 +1940,9 @@ class Fighter {
         if (burnBadge) {
             if (this.burnTurns > 0) {
                 burnBadge.innerText = `🔥 ${this.burnTurns}`;
-                burnBadge.classList.add("visible"); // Changed from active
+                burnBadge.classList.add("visible"); 
             } else {
-                burnBadge.classList.remove("visible"); // Changed from active
+                burnBadge.classList.remove("visible"); 
             }
         }
 
@@ -1931,9 +1950,9 @@ class Fighter {
         if (poisonBadge) {
             if (this.poisonTurns > 0) {
                 poisonBadge.innerText = `☠️ ${this.poisonTurns}`;
-                poisonBadge.classList.add("visible"); // Changed from active
+                poisonBadge.classList.add("visible"); 
             } else {
-                poisonBadge.classList.remove("visible"); // Changed from active
+                poisonBadge.classList.remove("visible"); 
             }
         }
 
@@ -2011,10 +2030,16 @@ class Fighter {
         
         // Poison Status Check
         if (actualHeal > 0 && this.poisonTurns > 0) {
-            this.stats.hp -= 1;
-            if (this.stats.hp < 0) this.stats.hp = 0;
-            triggerDamageVisual(this, 1);
-            updateLog(`${this.name} takes 1 damage from Poison for healing!`);
+            // FIX: Delay popup so original hit displays clearly
+            setTimeout(() => {
+                if(this.isAlive() || this.stats.hp === 0){
+                    this.stats.hp -= 1;
+                    if (this.stats.hp < 0) this.stats.hp = 0;
+                    triggerDamageVisual(this, 1);
+                    updateLog(`${this.name} takes 1 damage from Poison for healing!`);
+                    this.updateUI();
+                }
+            }, 600);
         }
 
         this.updateUI();
@@ -2055,10 +2080,16 @@ class Fighter {
 
         // Poison Status Check
         if (actualDamage > 0 && this.poisonTurns > 0 && this.isAlive()) {
-            this.stats.hp -= 1;
-            if (this.stats.hp < 0) this.stats.hp = 0;
-            triggerDamageVisual(this, 1);
-            updateLog(`${this.name} takes 1 damage from Poison from being attacked!`);
+            // FIX: Delay poison hit by 600ms so the first visual pop finishes smoothly without wiping out its UI slot!
+            setTimeout(() => {
+                if(this.isAlive() || this.stats.hp === 0){
+                    this.stats.hp -= 1;
+                    if (this.stats.hp < 0) this.stats.hp = 0;
+                    triggerDamageVisual(this, 1);
+                    updateLog(`${this.name} takes 1 damage from Poison from being attacked!`);
+                    this.updateUI();
+                }
+            }, 600);
         }
 
         if (attacker && attacker.nextAttackBurns > 0) {
@@ -2352,6 +2383,7 @@ window.onload = populateSelects;
 // ==========================================
 // 6. TARGETING & TURN CYCLE LOGIC
 // ==========================================
+let isPlayerPhase = true;
 let currentPlayerIndex = 0;
 let pendingMoveKey = null;
 let pendingCommandAlly = null;
@@ -2382,6 +2414,21 @@ function renderActionMenu(activePlayer) {
     const actionMenu = document.getElementById("action-menu");
     actionMenu.innerHTML = "";
 
+    // Main container for all buttons (moves + pass button)
+    const menuContainer = document.createElement("div");
+    menuContainer.style.display = "flex";
+    menuContainer.style.flexDirection = "column";
+    menuContainer.style.alignItems = "center";
+    menuContainer.style.gap = "10px";
+    menuContainer.style.width = "100%";
+
+    // Sub-container for standard move buttons
+    const movesContainer = document.createElement("div");
+    movesContainer.style.display = "flex";
+    movesContainer.style.flexWrap = "wrap";
+    movesContainer.style.gap = "10px";
+    movesContainer.style.justifyContent = "center";
+
     activePlayer.moves.forEach(moveKey => {
         const move = MovesetModule[moveKey];
         const btn = document.createElement("button");
@@ -2394,12 +2441,36 @@ function renderActionMenu(activePlayer) {
             btn.disabled = true;
         }
 
-        actionMenu.appendChild(btn);
+        movesContainer.appendChild(btn);
     });
-}
 
-function toggleActionButtons(disabled) {
-    document.querySelectorAll(".move-btn").forEach(btn => btn.disabled = disabled);
+    menuContainer.appendChild(movesContainer);
+
+    // PASS TURN BUTTON
+    const passBtn = document.createElement("button");
+    passBtn.className = "move-btn pass-btn";
+    passBtn.style.backgroundColor = "#c0392b";
+    passBtn.style.borderColor = "#922b21";
+    passBtn.innerText = "Pass Turn (+2 SP)";
+    passBtn.onclick = async () => {
+        document.getElementById("action-menu").innerHTML = ""; 
+        updateLog(`${activePlayer.name} passed their turn and regenerated 2 SP!`);
+        
+        const teamKey = activePlayer.isPlayer ? 'player' : 'enemy';
+        TeamStats[teamKey].sp = Math.min(TeamStats[teamKey].maxSp, TeamStats[teamKey].sp + 2);
+        updateTeamSPUI();
+        
+        await applyPostActionPoison(activePlayer);
+        
+        if (activeExtraTurnFighter) {
+            activeExtraTurnFighter = null;
+        }
+        currentPlayerIndex++;
+        setTimeout(processNextPlayerTurn, 600);
+    };
+
+    menuContainer.appendChild(passBtn);
+    actionMenu.appendChild(menuContainer);
 }
 
 function setTargetingMode(enabled, teamToTarget, excludeEntity = null, requiresVisibility = true) {
@@ -2491,8 +2562,51 @@ function handleEntityClick(targetFighter) {
     }
 }
 
+async function executeAILogic(activeFighter, friendlyTeam, opposingTeam, teamStats, onTurnComplete) {
+    const affordableMoves = activeFighter.moves.filter(mk => {
+        const m = MovesetModule[mk];
+        if (teamStats.sp < m.spCost) return false;
+        if (m.isUsable && !m.isUsable(activeFighter)) return false;
+        return true;
+    });
+
+    if (affordableMoves.length === 0) {
+        updateLog(`${activeFighter.name} passes their turn (+2 SP)!`);
+        teamStats.sp = Math.min(teamStats.maxSp, teamStats.sp + 2);
+        updateTeamSPUI();
+    } else {
+        const moveKey = affordableMoves[Math.floor(Math.random() * affordableMoves.length)];
+        const move = MovesetModule[moveKey];
+        teamStats.sp -= move.spCost;
+        updateTeamSPUI();
+
+        if (activeFighter.dizzyTurns > 0 && Math.random() < 0.5) {
+            updateLog(`${activeFighter.name} is dizzy and missed their action!`);
+            await new Promise(resolve => setTimeout(resolve, 800));
+        } else {
+            if (move.type === "melee") {
+                const target = getFrontmostAlive(opposingTeam);
+                if (target) await move.execute(activeFighter, target);
+            } else if (move.type === "ranged-any" || move.type === "offensive") {
+                const target = getRandomAliveTarget(opposingTeam);
+                if (target) await move.execute(activeFighter, target);
+            } else if (move.type === "aoe") {
+                await move.execute(activeFighter, opposingTeam);
+            } else if (move.type === "support-ally-target") {
+                const target = getRandomAliveTarget(friendlyTeam);
+                if (target) await move.execute(activeFighter, target);
+            } else {
+                await move.execute(activeFighter);
+            }
+        }
+    }
+
+    await applyPostActionPoison(activeFighter);
+    setTimeout(onTurnComplete, 600);
+}
+
 async function executePlayerTurn(moveKey, target) {
-    toggleActionButtons(true);
+    document.getElementById("action-menu").innerHTML = ""; // FIX: Hide buttons immediately
     const activePlayer = activeExtraTurnFighter || playerTeam[currentPlayerIndex];
     const move = MovesetModule[moveKey];
 
@@ -2508,229 +2622,141 @@ async function executePlayerTurn(moveKey, target) {
         await move.execute(activePlayer, target);
     }
 
-    // Refresh action menu buttons so things like shield usage locks disable properly immediately after execution
-    renderActionMenu(activePlayer);
-    toggleActionButtons(true); // Disable new buttons so user can't spam while turning over to next player
+    await applyPostActionPoison(activePlayer);
 
+    // If an ally was commanded, they get an extra turn immediately 
     if (pendingCommandAlly) {
         activeExtraTurnFighter = pendingCommandAlly;
         pendingCommandAlly = null;
-        updateLog(`${activeExtraTurnFighter.name} acts again via Command! Select a move:`);
-        await new Promise(resolve => setTimeout(resolve, 800));
+        document.getElementById("action-menu").innerHTML = ""; // Ensure UI remains cleared
+        updateLog(`${activeExtraTurnFighter.name} gets an extra action!`);
         
-        renderActionMenu(activeExtraTurnFighter);
+        setTimeout(() => {
+            const isAuto = document.getElementById("ai-mode-toggle") && document.getElementById("ai-mode-toggle").checked;
+            if (isAuto) {
+                executeAILogic(activeExtraTurnFighter, playerTeam, enemyTeam, TeamStats.player, () => {
+                    activeExtraTurnFighter = null;
+                    currentPlayerIndex++;
+                    processNextPlayerTurn();
+                });
+            } else {
+                renderActionMenu(activeExtraTurnFighter);
+            }
+        }, 800);
         return; 
     }
 
     if (activeExtraTurnFighter) {
         activeExtraTurnFighter = null;
     }
-
+    
     currentPlayerIndex++;
     setTimeout(processNextPlayerTurn, 600);
 }
 
-function startRound() {
+function checkWinCondition() {
+    const playersAlive = playerTeam.filter(p => p.isAlive()).length > 0;
+    const enemiesAlive = enemyTeam.filter(e => e.isAlive()).length > 0;
+
+    if (!playersAlive) {
+        updateLog("DEFEAT! Your team has been wiped out.");
+        document.getElementById("action-menu").innerHTML = `<button onclick="location.reload()" class="move-btn">Back to Menu</button>`;
+        return true;
+    }
+    if (!enemiesAlive) {
+        if (isTrialsMode) {
+            if (currentWave >= waveData.length - 1) {
+                updateLog("VICTORY! You have completed all Trials!");
+                document.getElementById("action-menu").innerHTML = `<button onclick="location.reload()" class="move-btn">Back to Menu</button>`;
+                return true;
+            } else {
+                updateLog(`Wave ${currentWave + 1} Cleared!`);
+                document.getElementById("action-menu").innerHTML = `<button onclick="currentWave++; loadTrialsWave()" class="move-btn">Next Wave</button>`;
+                return true;
+            }
+        } else {
+            updateLog("VICTORY! The enemy team has been wiped out.");
+            document.getElementById("action-menu").innerHTML = `<button onclick="location.reload()" class="move-btn">Back to Menu</button>`;
+            return true;
+        }
+    }
+    return false;
+}
+
+async function startRound() {
+    if (checkWinCondition()) return;
+    isPlayerPhase = true;
     currentPlayerIndex = 0;
+    updateLog("Player Team's Turn!");
+    await new Promise(resolve => setTimeout(resolve, 1000));
     processNextPlayerTurn();
 }
 
 async function processNextPlayerTurn() {
-    if (getAllAliveTargets(enemyTeam).length === 0) {
-        if (isTrialsMode) {
-            currentWave++;
-            if (currentWave >= waveData.length) {
-                updateLog("VICTORY! You have completed all 15 Trials!");
-                document.getElementById("action-menu").innerHTML = "";
-            } else {
-                updateLog(`Wave ${currentWave} cleared! Prepare for Wave ${currentWave + 1}...`);
-                document.getElementById("action-menu").innerHTML = "";
-                setTimeout(loadTrialsWave, 2000);
+    if (checkWinCondition()) return;
+
+    while (currentPlayerIndex < playerTeam.length) {
+        const p = playerTeam[currentPlayerIndex];
+        if (p.isAlive()) {
+            await p.onTurnStart();
+            if (!p.isAlive() || p.isSkippingTurn) {
+                currentPlayerIndex++;
+                continue;
             }
-        } else {
-            updateLog("VICTORY! All enemies have been defeated!");
-            document.getElementById("action-menu").innerHTML = "";
+            
+            updateLog(`${p.name}'s turn!`);
+            const isAuto = document.getElementById("ai-mode-toggle") && document.getElementById("ai-mode-toggle").checked;
+            
+            if (isAuto) {
+                await new Promise(r => setTimeout(r, 800));
+                executeAILogic(p, playerTeam, enemyTeam, TeamStats.player, () => {
+                    currentPlayerIndex++;
+                    processNextPlayerTurn();
+                });
+            } else {
+                renderActionMenu(p);
+            }
+            return;
         }
-        return;
-    }
-
-    while (currentPlayerIndex < playerTeam.length && !playerTeam[currentPlayerIndex].isAlive()) {
         currentPlayerIndex++;
-    }
-
-    if (currentPlayerIndex >= playerTeam.length) {
-        startEnemyPhase();
-        return;
-    }
-
-    const activePlayer = playerTeam[currentPlayerIndex];
-
-    if (activePlayer.isPassive) {
-        currentPlayerIndex++;
-        setTimeout(processNextPlayerTurn, 50);
-        return;
     }
     
-    await activePlayer.onTurnStart();
-
-    if (!activePlayer.isAlive()) {
-        currentPlayerIndex++;
-        setTimeout(processNextPlayerTurn, 300);
-        return;
-    }
-
-    if (activePlayer.isSkippingTurn) {
-        if (activePlayer.isSlow && activePlayer.turnCount % 2 === 0) {
-            updateLog(`${activePlayer.name} is slow and recharging (skipping turn)...`);
-            await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-        currentPlayerIndex++;
-        setTimeout(processNextPlayerTurn, 300);
-        return;
-    }
-
-    updateLog(`${activePlayer.name}'s turn! Select a move:`);
-    renderActionMenu(activePlayer); // Ensures buttons evaluate isUsable() fresh
+    startEnemyPhase();
 }
 
 async function startEnemyPhase() {
-    updateLog("--- ENEMY TURN PHASE ---");
-    document.getElementById("action-menu").innerHTML = "";
+    if (checkWinCondition()) return;
+    isPlayerPhase = false;
+    currentPlayerIndex = 0;
+    document.getElementById("action-menu").innerHTML = ""; // Ensure UI remains hidden during enemy phase
+    updateLog("Enemy Team's Turn!");
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    processNextEnemyTurn();
+}
 
-    const enemiesToAct = [...enemyTeam]; 
+async function processNextEnemyTurn() {
+    if (checkWinCondition()) return;
 
-    for (let i = 0; i < enemiesToAct.length; i++) {
-        const enemy = enemiesToAct[i];
-        if (!enemy.isAlive() || !enemyTeam.includes(enemy)) continue;
-        if (enemy.isPassive) continue;
-
-        await enemy.onTurnStart();
-
-        if (!enemy.isAlive() || !enemyTeam.includes(enemy)) continue;
-
-        if (enemy.isSkippingTurn) {
-            if (enemy.isSlow && enemy.turnCount % 2 === 0) {
-                updateLog(`${enemy.name} is slow and recharging (skipping turn)...`);
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-            continue;
-        }
-
-        const availableMoves = enemy.moves.filter(m => {
-            const moveData = MovesetModule[m];
-            const canAfford = TeamStats.enemy.sp >= (moveData.spCost || 0);
-            const usable = moveData.isUsable ? moveData.isUsable(enemy) : true;
-            return canAfford && usable;
-        });
-
-        let randomMoveKey;
-        let target;
-
-        // Musketeer AI update checks for existing ammo
-        if (enemy.characterKey === 'musketeer' && enemy.ammo > 0) {
-            randomMoveKey = "fire";
-            target = getRandomAliveTarget(playerTeam);
-        } else if (enemy.characterKey === 'medic') {
-            const aliveAllies = getAllAliveTargets(enemyTeam);
-            
-            if (aliveAllies.length === 1) {
-                randomMoveKey = "brace";
-                target = enemy;
-            } else {
-                let lowestAlly = null;
-                let lowestHpRatio = 1.1; 
-                
-                aliveAllies.forEach(ally => {
-                    if (ally !== enemy) {
-                        const ratio = ally.stats.hp / ally.stats.maxHp;
-                        if (ratio < lowestHpRatio) {
-                            lowestHpRatio = ratio;
-                            lowestAlly = ally;
-                        }
-                    }
-                });
-
-                if (lowestAlly && lowestAlly.stats.hp < lowestAlly.stats.maxHp) {
-                    target = lowestAlly;
-                    const missingHp = lowestAlly.stats.maxHp - lowestAlly.stats.hp;
-                    
-                    if (missingHp >= 4 && lowestHpRatio >= 0.6 && TeamStats.enemy.sp >= 5 && Math.random() < 0.5) {
-                        randomMoveKey = "surgery";
-                    } else {
-                        randomMoveKey = "heal";
-                    }
-                } else {
-                    randomMoveKey = "brace";
-                    target = enemy;
-                }
+    while (currentPlayerIndex < enemyTeam.length) {
+        const e = enemyTeam[currentPlayerIndex];
+        if (e.isAlive()) {
+            await e.onTurnStart();
+            if (!e.isAlive() || e.isSkippingTurn) {
+                currentPlayerIndex++;
+                continue;
             }
             
-            if (!availableMoves.includes(randomMoveKey)) {
-                randomMoveKey = availableMoves.length > 0 ? availableMoves[0] : "brace";
-            }
-        } else if (enemy.characterKey === 'forcefieldTrooper' && availableMoves.includes("placeShield")) {
-            randomMoveKey = "placeShield";
-            target = enemy;
-        } else {
-            randomMoveKey = availableMoves.length > 0 
-                ? availableMoves[Math.floor(Math.random() * availableMoves.length)] 
-                : enemy.moves[0];
-                
-            const move = MovesetModule[randomMoveKey];
-
-            if (move.type === 'melee') {
-                target = getFrontmostAlive(playerTeam);
-            } else if (move.type === 'aoe') {
-                target = playerTeam;
-            } else if (move.type === 'support' || move.type === 'support-allies') {
-                target = enemy;
-            } else if (move.type === 'support-ally-target') {
-                // Ensure enemies attempt to target other valid allies to maximize move utility (e.g., Command)
-                const validAllies = enemyTeam.filter(m => m.isAlive() && m !== enemy && m.invisibleTurns <= 0);
-                target = validAllies.length > 0 ? validAllies[Math.floor(Math.random() * validAllies.length)] : enemy;
-            } else if (move.type === 'ranged-any' || move.type === 'offensive') {
-                target = getRandomAliveTarget(playerTeam);
-            } else {
-                target = getRandomAliveTarget(enemyTeam);
-            }
-        }
-
-        const executedMove = MovesetModule[randomMoveKey];
-
-        if (executedMove.type === 'melee' || executedMove.type === 'ranged-any' || executedMove.type === 'offensive') {
-            if (!target) continue;
-        }
-
-        if (executedMove.spCost > 0) {
-            TeamStats.enemy.sp -= executedMove.spCost;
-            updateTeamSPUI();
-        }
-
-        if (enemy.dizzyTurns > 0 && Math.random() < 0.5) {
-            updateLog(`${enemy.name} is dizzy and missed their action!`);
+            updateLog(`${e.name}'s turn!`);
             await new Promise(resolve => setTimeout(resolve, 800));
-        } else {
-            await executedMove.execute(enemy, target);
+            
+            executeAILogic(e, enemyTeam, playerTeam, TeamStats.enemy, () => {
+                currentPlayerIndex++;
+                processNextEnemyTurn();
+            });
+            return;
         }
-        
-        // Let the Enemy Team seamlessly exploit Officer's 'Command' move
-        if (pendingCommandAlly && !pendingCommandAlly.isPlayer) {
-            enemiesToAct.splice(i + 1, 0, pendingCommandAlly);
-            pendingCommandAlly = null;
-        }
-        
-        await new Promise(resolve => setTimeout(resolve, 800));
+        currentPlayerIndex++;
     }
-
-    if (getAllAliveTargets(playerTeam).length === 0) {
-        updateLog("DEFEAT! Your team was wiped out!");
-        if (isTrialsMode) {
-            setTimeout(() => {
-                updateLog(`You survived until Wave ${currentWave + 1}.`);
-            }, 1500);
-        }
-        return;
-    }
-
+    
     startRound();
 }
