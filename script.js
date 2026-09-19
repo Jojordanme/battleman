@@ -747,11 +747,31 @@ const MovesetModule = {
     investment: {
         name: "Investment",
         type: "support",
-        spCost: 4,
+        spCost: 3,
+        isUsable(attacker) {
+            return !attacker.dealSecured;
+        },
         async execute(attacker) {
+            
             attacker.spRegenAmount = 7;
-            attacker.spRegenTurns = 2;
+            attacker.spRegenTurns = 1;
             updateLog(`${attacker.name} makes a smart Investment!`);
+            await playAnimation(`img-${attacker.id}`, "anim-boost", 800);
+        }
+    },
+    deal: {
+        name: "Deal",
+        type: "support",
+        spCost: 15,
+        isUsable(attacker) {
+            return !attacker.dealSecured;
+        },
+        async execute(attacker) {
+            attacker.spRegenAmount = 4;
+            attacker.spRegenTurns = 8;
+            attacker.dealSecured = true;
+
+            updateLog(`${attacker.name} secured a deal and gained passive SP!`);
             await playAnimation(`img-${attacker.id}`, "anim-boost", 800);
         }
     },
@@ -1733,6 +1753,7 @@ class Fighter {
 
         this.spRegenAmount = 0;
         this.spRegenTurns = 0;
+        this.dealSecured = false;
         this.defBoostAmount = 0;
         this.incomingDefenseOrders = 0;
         this.surgeryDefAttacks = 0; 
@@ -1869,9 +1890,13 @@ class Fighter {
                 TeamStats[teamKey].maxSp, 
                 TeamStats[teamKey].sp + this.spRegenAmount
             );
-            updateLog(`${this.name} regains ${this.spRegenAmount} Team SP from Investment!`);
+            updateLog(`${this.name} regains ${this.spRegenAmount} Team SP!`);
             this.spRegenTurns--;
             updateTeamSPUI();
+            await new Promise(resolve => setTimeout(resolve, 800));
+        } else if (this.spRegenTurns === 0 && this.dealSecured) {
+            this.dealSecured = false;
+            updateLog(`${this.name}'s SP Deal has expired.`);
             await new Promise(resolve => setTimeout(resolve, 800));
         }
     }
